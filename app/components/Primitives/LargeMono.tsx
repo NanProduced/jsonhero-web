@@ -1,8 +1,5 @@
-import { FunctionComponent } from "react";
+import type { ReactNode } from "react";
 
-export const LargeMono: FunctionComponent<{ className?: string }> = ({
-  className,
-  children,
-}) => {
+export function LargeMono({ className, children }: { className?: string; children?: ReactNode }) {
   return <p className={`font-mono text-md ${className}`}>{children}</p>;
-};
+}

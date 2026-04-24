@@ -1,10 +1,7 @@
-import { FunctionComponent } from "react";
+import type { ReactNode } from "react";
 
-export const LargeTitle: FunctionComponent<{ className?: string }> = ({
-  className,
-  children,
-}) => {
+export function LargeTitle({ className, children }: { className?: string; children?: ReactNode }) {
   return (
     <h1 className={`font-sans font-bold text-2xl ${className}`}>{children}</h1>
   );
-};
+}

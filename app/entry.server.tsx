@@ -1,21 +1,39 @@
-import { renderToString } from "react-dom/server";
-import { RemixServer } from "remix";
 import type { EntryContext } from "remix";
+import { RemixServer } from "@remix-run/react";
+import isbot from "isbot";
+import { renderToReadableStream } from "react-dom/server";
 
-export default function handleRequest(
+const ABORT_DELAY = 5000;
+
+export default async function handleRequest(
   request: Request,
   responseStatusCode: number,
   responseHeaders: Headers,
   remixContext: EntryContext
 ) {
-  const markup = renderToString(
-    <RemixServer context={remixContext} url={request.url} />
+  let didError = false;
+
+  const stream = await renderToReadableStream(
+    <RemixServer
+      context={remixContext}
+      url={request.url}
+      abortDelay={ABORT_DELAY}
+    />,
+    {
+      onError: (error: unknown) => {
+        didError = true;
+        console.error(error);
+      },
+    }
   );
 
-  responseHeaders.set("Content-Type", "text/html");
+  if (isbot(request.headers.get("user-agent"))) {
+    await stream.allReady;
+  }
 
-  return new Response("<!DOCTYPE html>" + markup, {
-    status: responseStatusCode,
-    headers: responseHeaders
+  responseHeaders.set("Content-Type", "text/html");
+  return new Response(stream, {
+    headers: responseHeaders,
+    status: didError ? 500 : responseStatusCode,
   });
 }

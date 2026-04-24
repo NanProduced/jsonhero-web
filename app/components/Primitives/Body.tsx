@@ -1,8 +1,5 @@
-import { FunctionComponent } from "react";
+import type { ReactNode } from "react";
 
-export const Body: FunctionComponent<{ className?: string }> = ({
-  className,
-  children,
-}) => {
+export function Body({ className, children }: { className?: string; children?: ReactNode }) {
   return <p className={`font-sans text-base ${className}`}>{children}</p>;
-};
+}
