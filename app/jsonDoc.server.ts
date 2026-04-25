@@ -1,12 +1,12 @@
 import { customRandom } from "nanoid";
 import safeFetch from "./utilities/safeFetch";
-import createFromRawXml from "./utilities/xml/createFromRawXml";
-import isXML from "./utilities/xml/isXML";
+import { converterManager, ConversionResult } from "./utilities/converters";
 
 type BaseJsonDocument = {
   id: string;
   title: string;
   readOnly: boolean;
+  originalFormat?: string;
 };
 
 export type RawJsonDocument = BaseJsonDocument & {
@@ -24,9 +24,14 @@ export type CreateJsonOptions = {
   readOnly?: boolean;
   injest?: boolean;
   metadata?: any;
+  originalFormat?: string;
 };
 
 export type JSONDocument = RawJsonDocument | UrlJsonDocument;
+
+export type ConversionWithFormat = ConversionResult & {
+  originalFormat?: string;
+};
 
 export async function createFromUrlOrRawJson(
   urlOrJson: string,
@@ -36,14 +41,42 @@ export async function createFromUrlOrRawJson(
     return createFromUrl(new URL(urlOrJson), title);
   }
 
-  if (isJSON(urlOrJson)) {
-    return createFromRawJson("Untitled", urlOrJson);
+  const conversionResult = convertToJsonWithFormat(urlOrJson);
+  
+  if (!conversionResult.success || !conversionResult.data) {
+    throw new Error(conversionResult.error || "Failed to parse content");
   }
 
-  // Wrapper for createFromRawJson to handle XML
-  // TODO ? change from urlOrJson to urlOrJsonOrXml
-  if (isXML(urlOrJson)) {
-    return createFromRawXml("Untitled", urlOrJson);
+  return createFromRawJson(
+    title || "Untitled",
+    conversionResult.data,
+    { originalFormat: conversionResult.originalFormat }
+  );
+}
+
+export function convertToJsonWithFormat(content: string): ConversionWithFormat {
+  const detectedConverter = converterManager.detectFormat(content);
+  
+  if (detectedConverter) {
+    const result = detectedConverter.convert(content);
+    return {
+      ...result,
+      originalFormat: detectedConverter.name,
+    };
+  }
+
+  try {
+    JSON.parse(content);
+    return {
+      success: true,
+      data: content,
+      originalFormat: "JSON",
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Invalid content format",
+    };
   }
 }
 
@@ -92,6 +125,7 @@ export async function createFromRawJson(
     contents,
     title: filename,
     readOnly: options?.readOnly ?? false,
+    originalFormat: options?.originalFormat,
   };
 
   JSON.parse(contents);
