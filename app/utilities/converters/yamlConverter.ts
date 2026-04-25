@@ -1,4 +1,4 @@
-import { load } from "js-yaml";
+import YAML from "yaml";
 import { FormatConverter, ConversionResult } from "./types";
 
 export class YamlConverter implements FormatConverter {
@@ -38,7 +38,7 @@ export class YamlConverter implements FormatConverter {
       }
       
       try {
-        const result = load(trimmed);
+        const result = YAML.parse(trimmed);
         return result !== undefined;
       } catch {
         return false;
@@ -50,7 +50,7 @@ export class YamlConverter implements FormatConverter {
 
   convert(content: string): ConversionResult {
     try {
-      const data = load(content);
+      const data = YAML.parse(content);
       
       if (data === undefined) {
         return {
@@ -61,24 +61,13 @@ export class YamlConverter implements FormatConverter {
       
       return {
         success: true,
-        data: JSON.stringify(data, (key, value) => {
-          if (typeof value === "bigint") {
-            return value.toString();
-          }
-          if (value instanceof Date) {
-            return value.toISOString();
-          }
-          return value;
-        }, 2),
+        data: JSON.stringify(data, null, 2),
       };
     } catch (error) {
       let errorMessage = "Unknown YAML conversion error";
       
       if (error instanceof Error) {
         errorMessage = error.message;
-        if (error.name === "YAMLException") {
-          errorMessage = `YAML parsing error: ${error.message}`;
-        }
       }
       
       return {

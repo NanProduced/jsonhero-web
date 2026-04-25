@@ -67,14 +67,14 @@ export class CsvConverter implements FormatConverter {
         header: true,
         skipEmptyLines: true,
         dynamicTyping: true,
+        quoteChar: '"',
+        escapeChar: '"',
+        delimiter: ",",
+        transformHeader: (header: string) => header.trim(),
       }) as ParseResult;
 
-      const hasFatalErrors = (result.errors || []).filter(
-        (err: any) => err.code !== "TooManyFields" && err.code !== "TooFewFields"
-      );
-
-      if (hasFatalErrors.length > 0) {
-        const errorMessages = hasFatalErrors.slice(0, 5).map((err: any) => 
+      if (result.errors && result.errors.length > 0) {
+        const errorMessages = result.errors.slice(0, 5).map((err: any) => 
           `Row ${err.row}: ${err.message}`
         ).join("; ");
         
