@@ -34,15 +34,7 @@ import {
 import { TreeIcon } from "./Icons/TreeIcon";
 import { ColumnViewNode } from "~/useColumnView";
 import { colorForItemAtPath } from "~/utilities/colors";
-import {
-  PathBar,
-  PathHistoryControls,
-  PathBarLink,
-  PathBarLinkProps,
-} from "./PathBar";
-import { SearchBar } from "./SearchBar";
 import { ToolTip } from "./ToolTip";
-import { ShortcutIcon } from "./Icons/ShortcutIcon";
 
 export interface CompareLayoutProps {
   loaderData: {
@@ -205,8 +197,6 @@ function CompareViewButton({ view, activeView, setActiveView, icon: Icon, label 
 function CompareSideBar({
   syncSettings,
   setSyncSettings,
-  activeView,
-  setActiveView,
 }: {
   syncSettings: {
     syncScroll: boolean;
@@ -376,7 +366,6 @@ function ComparePanelContent({
   activeView,
 }: ComparePanelContentProps) {
   const compareScope = useCompareScope(side);
-  const compare = useOptionalCompare();
 
   const contextValue: CompareDiffContextType | undefined = useMemo(() => {
     if (!compareScope.isCompareMode) {
@@ -391,16 +380,6 @@ function ComparePanelContent({
 
   const content = (
     <div className="flex flex-col h-full">
-      <div className="flex justify-between p-1 bg-slate-200 border-slate-300 border-b-[1px] transition dark:bg-slate-900 dark:border-slate-600">
-        <div className="flex-shrink-0 flex-grow-0">
-          <PathHistoryControls />
-        </div>
-        <div className="flex-1 pr-2 min-w-0">
-          <PathBar />
-        </div>
-        <SearchBar />
-      </div>
-
       <div className="flex-1 overflow-hidden">
         {activeView === "column" && <CompareColumnView side={side} />}
         {activeView === "tree" && <JsonTreeView />}
@@ -430,19 +409,27 @@ function CompareColumnView({ side }: CompareColumnViewProps) {
   const api = useJsonColumnViewAPI();
   const compare = useOptionalCompare();
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const [isSyncing, setIsSyncing] = React.useState(false);
+  
+  const compareRef = React.useRef(compare);
+  React.useEffect(() => {
+    compareRef.current = compare;
+  }, [compare]);
 
-  const goToNextSibling = api.goToNextSibling;
-  const goToPreviousSibling = api.goToPreviousSibling;
-  const goToChildren = api.goToChildren;
-  const goToParent = api.goToParent;
-  const resetSelection = api.resetSelection;
-  const goToNodeId = api.goToNodeId;
+  const sideRef = React.useRef(side);
+  React.useEffect(() => {
+    sideRef.current = side;
+  }, [side]);
+
+  const previousSelectedPathRef = React.useRef<string | undefined>(undefined);
+  const isSyncingRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (!compare || !selectedNodeId || isSyncing) return;
-    compare.selectPath(side, selectedNodeId);
-  }, [compare, side, selectedNodeId, isSyncing]);
+    if (!selectedNodeId || isSyncingRef.current) return;
+    if (previousSelectedPathRef.current === selectedNodeId) return;
+    
+    previousSelectedPathRef.current = selectedNodeId;
+    compareRef.current?.selectPath(sideRef.current, selectedNodeId);
+  }, [selectedNodeId]);
 
   React.useEffect(() => {
     if (
@@ -457,13 +444,17 @@ function CompareColumnView({ side }: CompareColumnViewProps) {
 
     if (
       otherSelectedPath &&
-      otherSelectedPath !== selectedNodeId
+      otherSelectedPath !== selectedNodeId &&
+      otherSelectedPath !== previousSelectedPathRef.current
     ) {
-      setIsSyncing(true);
-      goToNodeId(otherSelectedPath, "sync");
-      setTimeout(() => setIsSyncing(false), 50);
+      isSyncingRef.current = true;
+      previousSelectedPathRef.current = otherSelectedPath;
+      api.goToNodeId(otherSelectedPath, "sync");
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 100);
     }
-  }, [compare, side, selectedNodeId, goToNodeId]);
+  }, [compare, side, selectedNodeId, api.goToNodeId]);
 
   return (
     <div {...getColumnViewProps()} ref={containerRef} className="h-full overflow-auto">

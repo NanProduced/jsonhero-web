@@ -160,18 +160,38 @@ export function CompareProvider({
       setState((prev) => {
         if (!prev.isCompareMode) return prev;
 
+        const currentPath = scope === "left" ? prev.left.selectedPath : prev.right.selectedPath;
+        const otherPath = scope === "left" ? prev.right.selectedPath : prev.left.selectedPath;
+
+        if (currentPath === path) {
+          if (!prev.syncSettings.syncSelection) {
+            return prev;
+          }
+          if (otherPath === path) {
+            return prev;
+          }
+        }
+
         const newState = { ...prev };
 
         if (scope === "left") {
-          newState.left = { ...prev.left, selectedPath: path };
-          if (prev.syncSettings.syncSelection) {
+          if (currentPath !== path) {
+            newState.left = { ...prev.left, selectedPath: path };
+          }
+          if (prev.syncSettings.syncSelection && otherPath !== path) {
             newState.right = { ...prev.right, selectedPath: path };
           }
         } else {
-          newState.right = { ...prev.right, selectedPath: path };
-          if (prev.syncSettings.syncSelection) {
+          if (currentPath !== path) {
+            newState.right = { ...prev.right, selectedPath: path };
+          }
+          if (prev.syncSettings.syncSelection && otherPath !== path) {
             newState.left = { ...prev.left, selectedPath: path };
           }
+        }
+
+        if (newState.left === prev.left && newState.right === prev.right) {
+          return prev;
         }
 
         return newState;
