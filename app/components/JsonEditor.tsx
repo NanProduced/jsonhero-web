@@ -1,3 +1,4 @@
+import { JSONHeroPath } from "@jsonhero/path";
 import { CodeEditor } from "./CodeEditor";
 import { useJson } from "~/hooks/useJson";
 import { useCallback, useMemo, useRef } from "react";
@@ -7,18 +8,42 @@ import {
 } from "~/hooks/useJsonColumnView";
 import { ViewUpdate } from "@uiw/react-codemirror";
 import jsonMap from "json-source-map";
-import { JSONHeroPath } from "@jsonhero/path";
-import {usePreferences} from '~/components/PreferencesProvider'
+import { useSchemaValidationAPI, useSchemaValidationState } from "~/hooks/useSchemaValidation";
+import { usePreferences } from "~/components/PreferencesProvider";
 
 export function JsonEditor() {
   const [json] = useJson();
   const { selectedNodeId } = useJsonColumnViewState();
   const { goToNodeId } = useJsonColumnViewAPI();
   const [preferences] = usePreferences();
+  const { validationResult, validationMode } = useSchemaValidationState();
+  const api = useSchemaValidationAPI();
 
   const jsonMapped = useMemo(() => {
     return jsonMap.stringify(json, null, preferences?.indent || 2);
   }, [json, preferences]);
+
+  const errorRanges = useMemo<Array<{ start: number; end: number; path: string }>>(() => {
+    if (validationMode !== "external" || !validationResult || validationResult.errors.length === 0) {
+      return [];
+    }
+
+    const ranges: Array<{ start: number; end: number; path: string }> = [];
+
+    validationResult.errors.forEach((error) => {
+      const path = new JSONHeroPath(error.path);
+      const pointer = path.jsonPointer();
+      const location = jsonMapped.pointers[pointer];
+
+      if (location) {
+        const start = location.key ? location.key.pos : location.value.pos;
+        const end = location.valueEnd.pos;
+        ranges.push({ start, end, path: error.path });
+      }
+    });
+
+    return ranges;
+  }, [validationMode, validationResult, jsonMapped]);
 
   const selection = useMemo<{ start: number; end: number } | undefined>(() => {
     if (!selectedNodeId) {
@@ -59,7 +84,6 @@ export function JsonEditor() {
 
       currentSelectedLine.current = line.number;
 
-      // Find the key if the selected line using jsonMapped.pointers
       const pointerEntry = Object.entries(jsonMapped.pointers).find(
         ([pointer, info]) => {
           return info.value.line === line.number - 1;
@@ -76,16 +100,26 @@ export function JsonEditor() {
 
       goToNodeId(path.toString(), "editor");
     },
-    [goToNodeId]
+    [goToNodeId, jsonMapped]
   );
 
   return (
-    <CodeEditor
-      language="json"
-      content={jsonMapped.json}
-      readOnly={true}
-      onUpdate={onUpdate}
-      selection={selection}
-    />
+    <div className="relative">
+      <CodeEditor
+        language="json"
+        content={jsonMapped.json}
+        readOnly={true}
+        onUpdate={onUpdate}
+        selection={selection}
+        errorRanges={errorRanges.length > 0 ? errorRanges : undefined}
+      />
+      {validationMode === "external" && validationResult && !validationResult.valid && (
+        <div className="absolute top-2 right-2 z-10">
+          <div className="bg-red-500 text-white px-3 py-1 rounded text-sm font-medium">
+            {validationResult.errorCount} error{validationResult.errorCount !== 1 ? "s" : ""}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

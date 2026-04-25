@@ -6,6 +6,7 @@ import { GithubStar } from "./UI/GithubStar";
 import { Logo } from "./Icons/Logo";
 import { Share } from "./Share";
 import { NewDocument } from "./NewDocument";
+import { SchemaManager } from "./SchemaManager";
 import {
   Popover,
   PopoverArrow,
@@ -30,6 +31,8 @@ export function Header() {
       </div>
       <DocumentTitle />
       <ol className="flex text-sm items-center gap-2 px-4">
+        <SchemaManager />
+
         {!doc.readOnly && (
           <Form
             method="delete"
