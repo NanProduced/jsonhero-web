@@ -1,4 +1,4 @@
-import yaml from "js-yaml";
+import { load } from "js-yaml";
 import { FormatConverter, ConversionResult } from "./types";
 
 export class YamlConverter implements FormatConverter {
@@ -25,10 +25,10 @@ export class YamlConverter implements FormatConverter {
       
       const yamlIndicators = [
         /^---\s*$/m,
-        /^\s*-\s+\w/m,
-        /^\s*\w+:\s*/m,
-        /^\s*\w+:\s*\|/m,
-        /^\s*\w+:\s*>/m,
+        /^\s*-\s+\S/m,
+        /^\s*[\w-]+:\s*/m,
+        /^\s*[\w-]+:\s*\|/m,
+        /^\s*[\w-]+:\s*>/m,
       ];
       
       const hasYamlIndicator = yamlIndicators.some(pattern => pattern.test(trimmed));
@@ -38,8 +38,8 @@ export class YamlConverter implements FormatConverter {
       }
       
       try {
-        yaml.load(trimmed);
-        return true;
+        const result = load(trimmed);
+        return result !== undefined;
       } catch {
         return false;
       }
@@ -50,23 +50,40 @@ export class YamlConverter implements FormatConverter {
 
   convert(content: string): ConversionResult {
     try {
-      const data = yaml.load(content);
+      const data = load(content);
       
-      if (data === undefined || data === null) {
+      if (data === undefined) {
         return {
           success: false,
-          error: "YAML content is empty or null",
+          error: "YAML content is empty or undefined",
         };
       }
       
       return {
         success: true,
-        data: JSON.stringify(data, null, 2),
+        data: JSON.stringify(data, (key, value) => {
+          if (typeof value === "bigint") {
+            return value.toString();
+          }
+          if (value instanceof Date) {
+            return value.toISOString();
+          }
+          return value;
+        }, 2),
       };
     } catch (error) {
+      let errorMessage = "Unknown YAML conversion error";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        if (error.name === "YAMLException") {
+          errorMessage = `YAML parsing error: ${error.message}`;
+        }
+      }
+      
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown YAML conversion error",
+        error: errorMessage,
       };
     }
   }
