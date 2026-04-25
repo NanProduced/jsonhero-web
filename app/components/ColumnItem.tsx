@@ -4,6 +4,10 @@ import { memo, useEffect, useMemo, useRef } from "react";
 import { ColumnViewNode } from "~/useColumnView";
 import { colorForItemAtPath } from "~/utilities/colors";
 import { Body } from "./Primitives/Body";
+import {
+  useOptionalJsonDiffViewContext,
+} from "./JsonDiffView";
+import { DiffType } from "~/utilities/jsonDiff";
 
 export type ColumnItemProps = {
   item: ColumnViewNode;
@@ -21,8 +25,39 @@ function ColumnItemElement({
   onClick,
 }: ColumnItemProps) {
   const htmlElement = useRef<HTMLDivElement>(null);
+  const diffViewContext = useOptionalJsonDiffViewContext();
 
   const showArrow = item.children.length > 0;
+
+  const diffType: DiffType | null = useMemo(() => {
+    if (!diffViewContext) return null;
+    return diffViewContext.getDiffType(item.id);
+  }, [diffViewContext, item.id]);
+
+  const hasDiff: boolean = useMemo(() => {
+    if (!diffViewContext) return false;
+    return diffViewContext.hasDiff(item.id);
+  }, [diffViewContext, item.id]);
+
+  const diffBorderStyle = useMemo<string>(() => {
+    if (!diffType) return "";
+
+    switch (diffType) {
+      case "added":
+        return "border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-900/20";
+      case "deleted":
+        return "border-l-4 border-l-red-500 bg-red-50/50 dark:bg-red-900/20 line-through decoration-red-400/50";
+      case "modified":
+        return "border-l-4 border-l-yellow-500 bg-yellow-50/50 dark:bg-yellow-900/20";
+      default:
+        return "";
+    }
+  }, [diffType]);
+
+  const diffIndicatorStyle = useMemo<string>(() => {
+    if (!hasDiff) return "";
+    return "ring-1 ring-inset ring-slate-300/50 dark:ring-slate-600/50";
+  }, [hasDiff]);
 
   const stateStyle = useMemo<string>(() => {
     if (isHighlighted) {
@@ -50,10 +85,16 @@ function ColumnItemElement({
     }
   }, [isSelected, isHighlighted]);
 
+  const handleClick = () => {
+    if (onClick) {
+      onClick(item.id);
+    }
+  };
+
   return (
     <div
-      className={`flex h-9 items-center justify-items-stretch mx-1 px-1 py-1 my-1 rounded-sm ${stateStyle}`}
-      onClick={() => onClick && onClick(item.id)}
+      className={`flex h-9 items-center justify-items-stretch mx-1 px-1 py-1 my-1 rounded-sm ${stateStyle} ${diffBorderStyle} ${diffIndicatorStyle}`}
+      onClick={handleClick}
       ref={htmlElement}
     >
       <div className="w-4 flex-none flex-col justify-items-center">
@@ -83,10 +124,50 @@ function ColumnItemElement({
         )}
       </div>
 
+      {diffType && diffType !== "unchanged" && (
+        <DiffBadge type={diffType} />
+      )}
+
       {showArrow && (
         <ChevronRightIcon className="flex-none w-4 h-4 text-gray-400" />
       )}
     </div>
+  );
+}
+
+function DiffBadge({ type }: { type: DiffType }) {
+  const badgeStyle = useMemo(() => {
+    switch (type) {
+      case "added":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      case "deleted":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+      case "modified":
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+      default:
+        return "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200";
+    }
+  }, [type]);
+
+  const badgeText = useMemo(() => {
+    switch (type) {
+      case "added":
+        return "+";
+      case "deleted":
+        return "-";
+      case "modified":
+        return "~";
+      default:
+        return "";
+    }
+  }, [type]);
+
+  return (
+    <span
+      className={`inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full ml-1 ${badgeStyle}`}
+    >
+      {badgeText}
+    </span>
   );
 }
 
