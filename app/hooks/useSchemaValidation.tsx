@@ -6,6 +6,7 @@ import {
   SetStateAction,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -79,6 +80,10 @@ export function SchemaValidationProvider({ children }: { children: ReactNode }) 
       setValidationResult(null);
     }
   }, [json, validationMode, externalSchema]);
+
+  useEffect(() => {
+    runValidation();
+  }, [runValidation]);
 
   const setValidationMode = useCallback(
     (mode: ValidationMode) => {
