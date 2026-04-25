@@ -30,18 +30,23 @@ export function SchemaValidationInfo() {
 
   const fieldFrequency = useMemo(() => {
     if (!selectedNodeId) return null;
-
-    const parentPath = selectedNodeId.substring(0, selectedNodeId.lastIndexOf("."));
-    const parentFreq = api.getFrequencyForPath(parentPath);
-    if (!parentFreq) return null;
-
-    const fieldName = selectedNodeId.substring(selectedNodeId.lastIndexOf(".") + 1);
-    return parentFreq.frequencies.find((f) => f.fieldName === fieldName);
+    return api.findArrayFrequencyForField(selectedNodeId);
   }, [selectedNodeId, api]);
 
   const arrayFrequencies = useMemo(() => {
     if (!selectedNodeId) return null;
-    return api.getFrequencyForPath(selectedNodeId);
+
+    const directMatch = api.getFrequencyForPath(selectedNodeId);
+    if (directMatch) {
+      return directMatch;
+    }
+
+    const parentArrayPath = api.findParentArrayPath(selectedNodeId);
+    if (parentArrayPath) {
+      return api.getFrequencyForPath(parentArrayPath);
+    }
+
+    return null;
   }, [selectedNodeId, api]);
 
   if (validationMode !== "external" && !fieldFrequency && !arrayFrequencies) {

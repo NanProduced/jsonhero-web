@@ -31,15 +31,7 @@ function ColumnItemElement({
   }, [item.id, api, validationMode]);
 
   const fieldFrequency = useMemo(() => {
-    const freqResult = api.getFrequencyForPath(item.id);
-    if (!freqResult) return null;
-
-    const parentPath = item.id.substring(0, item.id.lastIndexOf("."));
-    const parentFreq = api.getFrequencyForPath(parentPath);
-    if (!parentFreq) return null;
-
-    const fieldName = item.id.substring(item.id.lastIndexOf(".") + 1);
-    return parentFreq.frequencies.find((f) => f.fieldName === fieldName);
+    return api.findArrayFrequencyForField(item.id);
   }, [item.id, api]);
 
   const showArrow = item.children.length > 0;

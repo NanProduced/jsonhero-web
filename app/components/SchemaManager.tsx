@@ -58,7 +58,7 @@ export function SchemaManager() {
         </button>
       </PopoverTrigger>
       <PopoverContent side="bottom" sideOffset={8} className="w-[500px]">
-        <div className="p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 p-4">
           <div className="flex items-center justify-between mb-4">
             <Body className="font-bold text-slate-800 dark:text-slate-200">
               Schema Validation

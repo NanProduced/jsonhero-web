@@ -44,13 +44,14 @@ export function calculateFieldFrequencies(data: unknown): FieldFrequencyResult[]
         });
 
         value.forEach((item, index) => {
-          processValue(item, `${currentPath}[${index}]`);
+          processValue(item, `${currentPath}.${index}`);
         });
       }
     } else if (typeof value === "object" && value !== null) {
       const obj = value as Record<string, unknown>;
       Object.entries(obj).forEach(([key, val]) => {
-        processValue(val, currentPath === "$" ? `$.${key}` : `${currentPath}.${key}`);
+        const cleanKey = key.replace(/\./g, "\\.");
+        processValue(val, currentPath === "$" ? `$.${cleanKey}` : `${currentPath}.${cleanKey}`);
       });
     }
   }
@@ -151,11 +152,8 @@ function jsonPointerToPath(pointer: string): string {
 
   let result = "$";
   parts.forEach((part) => {
-    if (/^\d+$/.test(part)) {
-      result += `[${part}]`;
-    } else {
-      result += `.${part}`;
-    }
+    const cleanPart = part.replace(/\./g, "\\.");
+    result += `.${cleanPart}`;
   });
 
   return result;
@@ -169,7 +167,7 @@ export function getErrorsForPath(
     if (error.path === path) {
       return true;
     }
-    if (error.path.startsWith(path + ".") || error.path.startsWith(path + "[")) {
+    if (error.path.startsWith(path + ".")) {
       return true;
     }
     return false;
@@ -181,7 +179,7 @@ export function hasErrorsAtPath(errors: SchemaValidationError[], path: string): 
     if (error.path === path) {
       return true;
     }
-    if (error.path.startsWith(path + ".") || error.path.startsWith(path + "[")) {
+    if (error.path.startsWith(path + ".")) {
       return true;
     }
     return false;
@@ -198,4 +196,88 @@ export function parseSchema(schemaString: string): JSONSchema7 | null {
   } catch {
     return null;
   }
+}
+
+export function isArrayIndex(part: string): boolean {
+  return /^\d+$/.test(part);
+}
+
+export function getPathParts(path: string): string[] {
+  if (path === "$") {
+    return [];
+  }
+  const parts = path.substring(2).split(/(?<!\\)\./);
+  return parts.map((part) => part.replace(/\\\./g, "."));
+}
+
+export function findArrayFrequencyForField(
+  fieldFrequencies: FieldFrequencyResult[],
+  path: string
+): FieldFrequency | null {
+  if (!path || path === "$") {
+    return null;
+  }
+
+  const parts = getPathParts(path);
+  if (parts.length < 1) {
+    return null;
+  }
+
+  const fieldName = parts[parts.length - 1];
+
+  let currentPathParts = parts.slice(0, -1);
+
+  while (currentPathParts.length >= 0) {
+    const currentPath =
+      currentPathParts.length === 0
+        ? "$"
+        : "$." + currentPathParts.map((p) => p.replace(/\./g, "\\.")).join(".");
+
+    const freqResult = fieldFrequencies.find((f) => f.path === currentPath);
+
+    if (freqResult) {
+      const found = freqResult.frequencies.find((f) => f.fieldName === fieldName);
+      if (found) {
+        return found;
+      }
+    }
+
+    if (currentPathParts.length === 0) {
+      break;
+    }
+
+    currentPathParts = currentPathParts.slice(0, -1);
+  }
+
+  return null;
+}
+
+export function findParentArrayPath(fieldFrequencies: FieldFrequencyResult[], path: string): string | null {
+  if (!path || path === "$") {
+    return null;
+  }
+
+  const parts = getPathParts(path);
+
+  let currentPathParts = parts;
+
+  while (currentPathParts.length >= 0) {
+    const currentPath =
+      currentPathParts.length === 0
+        ? "$"
+        : "$." + currentPathParts.map((p) => p.replace(/\./g, "\\.")).join(".");
+
+    const freqResult = fieldFrequencies.find((f) => f.path === currentPath);
+    if (freqResult) {
+      return currentPath;
+    }
+
+    if (currentPathParts.length === 0) {
+      break;
+    }
+
+    currentPathParts = currentPathParts.slice(0, -1);
+  }
+
+  return null;
 }
