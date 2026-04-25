@@ -13,7 +13,7 @@ import { getEditorSetup } from "~/utilities/codeMirrorSetup";
 import { darkTheme, lightTheme } from "~/utilities/codeMirrorTheme";
 import { useTheme } from "./ThemeProvider";
 import { useHotkeys } from "react-hotkeys-hook";
-import { Extension } from "@codemirror/state";
+import { Extension, StateEffect, StateField } from "@codemirror/state";
 
 export type CodeEditorProps = {
   content: string;
@@ -66,6 +66,25 @@ function createErrorDecorations(
   );
 }
 
+const setErrorDecorationsEffect = StateEffect.define<DecorationSet>();
+
+const errorDecorationsField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(decorations, transaction) {
+    for (const effect of transaction.effects) {
+      if (effect.is(setErrorDecorationsEffect)) {
+        return effect.value;
+      }
+    }
+    return decorations;
+  },
+  provide(field) {
+    return EditorView.decorations.from(field);
+  },
+});
+
 export function CodeEditor(opts: CodeEditorProps) {
   const { content, language, readOnly, onChange, onUpdate, selection, errorRanges } = {
     ...defaultProps,
@@ -73,7 +92,6 @@ export function CodeEditor(opts: CodeEditorProps) {
   };
 
   const [theme] = useTheme();
-  const [currentDecorations, setCurrentDecorations] = useState<DecorationSet>(Decoration.none);
 
   const extensions = useMemo<Extension[]>(() => {
     const exts = getEditorSetup();
@@ -88,6 +106,8 @@ export function CodeEditor(opts: CodeEditorProps) {
         },
       })
     );
+
+    exts.push(errorDecorationsField);
 
     return exts;
   }, [language]);
@@ -139,16 +159,24 @@ export function CodeEditor(opts: CodeEditorProps) {
   }, [selection, view, setSelectionRef.current]);
 
   useEffect(() => {
-    if (!view || !errorRanges || errorRanges.length === 0) {
-      if (currentDecorations !== Decoration.none) {
-        setCurrentDecorations(Decoration.none);
-      }
+    if (!view) {
       return;
     }
 
-    const newDecorations = createErrorDecorations(errorRanges, view.state.doc);
-    setCurrentDecorations(newDecorations);
-  }, [view, errorRanges, currentDecorations]);
+    let decorations: DecorationSet;
+
+    if (!errorRanges || errorRanges.length === 0) {
+      decorations = Decoration.none;
+    } else {
+      decorations = createErrorDecorations(errorRanges, view.state.doc);
+    }
+
+    const transactionSpec: TransactionSpec = {
+      effects: setErrorDecorationsEffect.of(decorations),
+    };
+
+    view.dispatch(transactionSpec);
+  }, [view, errorRanges]);
 
   const { minimal } = useJsonDoc();
 
