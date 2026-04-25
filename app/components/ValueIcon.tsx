@@ -22,8 +22,10 @@ import {
   KeyIcon,
   PhoneIcon,
   PhotographIcon,
+  SearchIcon,
 } from "@heroicons/react/outline";
 import { JSONValueType } from "@jsonhero/json-infer-types";
+import { recognizeCustomFormat } from "../utilities/customFormats";
 import { colorForTypeName } from "../utilities/colors";
 import { StringIcon } from "./Icons/StringIcon";
 
@@ -80,6 +82,22 @@ export const ValueIcon: FunctionComponent<ValueIconProps> = ({
       return <HashtagIcon className={classes} />;
     }
     case "string": {
+      const customFormat = recognizeCustomFormat(type.value);
+      if (customFormat) {
+        switch (customFormat.type) {
+          case "geoCoordinate":
+            return <GlobeAltIcon className={classes} />;
+          case "isbn":
+            return <DocumentTextIcon className={classes} />;
+          case "iban":
+            return <CurrencyDollarIcon className={classes} />;
+          case "regex":
+            return <SearchIcon className={classes} />;
+          case "semanticColor":
+            return <ColorSwatchIcon className={classes} />;
+        }
+      }
+
       if (type.format == null) {
         return <StringIcon className={classes} />;
       }

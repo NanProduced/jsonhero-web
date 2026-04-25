@@ -23,9 +23,11 @@ import {
   KeyIcon,
   DocumentTextIcon,
   HashtagIcon,
+  SearchIcon,
 } from "@heroicons/react/outline";
 import { inferType, JSONValueType } from "@jsonhero/json-infer-types";
 import { StringIcon } from "~/components/Icons/StringIcon";
+import { recognizeCustomFormat } from "~/utilities/customFormats";
 import { IconComponent } from "~/useColumnView";
 
 export function iconForValue(value: unknown): IconComponent {
@@ -63,6 +65,22 @@ export function iconForType(type: JSONValueType): IconComponent {
       return HashtagIcon;
     }
     case "string": {
+      const customFormat = recognizeCustomFormat(type.value);
+      if (customFormat) {
+        switch (customFormat.type) {
+          case "geoCoordinate":
+            return GlobeAltIcon;
+          case "isbn":
+            return DocumentTextIcon;
+          case "iban":
+            return CurrencyDollarIcon;
+          case "regex":
+            return SearchIcon;
+          case "semanticColor":
+            return ColorSwatchIcon;
+        }
+      }
+
       if (type.format == null) {
         return StringIcon;
       }

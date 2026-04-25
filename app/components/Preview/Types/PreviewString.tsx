@@ -4,16 +4,60 @@ import {
   JSONJSONFormat,
 } from "@jsonhero/json-infer-types/lib/formats";
 import Color from "color";
+import { useMemo } from "react";
 import { CodeViewer } from "~/components/CodeViewer";
+import { recognizeCustomFormat } from "~/utilities/customFormats";
 import { PreviewBox } from "../PreviewBox";
 import { PreviewAudioUri } from "./PreviewAudioUri";
 import { PreviewDate } from "./PreviewDate";
+import { PreviewGeoCoordinate } from "./PreviewGeoCoordinate";
+import { PreviewIBAN } from "./PreviewIBAN";
 import { PreviewImageUri } from "./PreviewImageUri";
 import { PreviewIPFSImage } from "./PreviewIPFSImage";
+import { PreviewISBN } from "./PreviewISBN";
+import { PreviewRegex } from "./PreviewRegex";
+import { PreviewSemanticColor } from "./PreviewSemanticColor";
 import { PreviewUri } from "./PreviewUri";
 import { PreviewVideoUri } from "./PreviewVideoUri";
 
 export function PreviewString({ info }: { info: JSONStringType }) {
+  const customFormat = useMemo(() => recognizeCustomFormat(info.value), [info.value]);
+
+  if (customFormat) {
+    switch (customFormat.type) {
+      case "geoCoordinate":
+        return (
+          <PreviewGeoCoordinate
+            latitude={customFormat.latitude}
+            longitude={customFormat.longitude}
+          />
+        );
+      case "isbn":
+        return <PreviewISBN isbn={customFormat.isbn} variant={customFormat.variant} />;
+      case "iban":
+        return (
+          <PreviewIBAN
+            iban={customFormat.iban}
+            countryCode={customFormat.countryCode}
+            bankCode={customFormat.bankCode}
+            accountNumber={customFormat.accountNumber}
+            valid={customFormat.valid}
+          />
+        );
+      case "regex":
+        return (
+          <PreviewRegex pattern={customFormat.pattern} flags={customFormat.flags} />
+        );
+      case "semanticColor":
+        return (
+          <PreviewSemanticColor
+            colorName={customFormat.colorName}
+            hexValue={customFormat.hexValue}
+          />
+        );
+    }
+  }
+
   if (info.format == null) {
     return <></>;
   }
