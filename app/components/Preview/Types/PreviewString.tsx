@@ -5,15 +5,30 @@ import {
 } from "@jsonhero/json-infer-types/lib/formats";
 import Color from "color";
 import { CodeViewer } from "~/components/CodeViewer";
+import {
+  detectFormat,
+  DetectedFormat,
+  SemanticColorData,
+} from "~/utilities/formatDetectors";
 import { PreviewBox } from "../PreviewBox";
 import { PreviewAudioUri } from "./PreviewAudioUri";
 import { PreviewDate } from "./PreviewDate";
+import { PreviewGeolocation } from "./PreviewGeolocation";
+import { PreviewIBAN } from "./PreviewIBAN";
 import { PreviewImageUri } from "./PreviewImageUri";
 import { PreviewIPFSImage } from "./PreviewIPFSImage";
+import { PreviewISBN } from "./PreviewISBN";
+import { PreviewRegex } from "./PreviewRegex";
 import { PreviewUri } from "./PreviewUri";
 import { PreviewVideoUri } from "./PreviewVideoUri";
 
 export function PreviewString({ info }: { info: JSONStringType }) {
+  const customFormat = detectFormat(info.value);
+
+  if (customFormat) {
+    return <CustomPreview format={customFormat} />;
+  }
+
   if (info.format == null) {
     return <></>;
   }
@@ -78,6 +93,23 @@ export function PreviewString({ info }: { info: JSONStringType }) {
   }
 }
 
+function CustomPreview({ format }: { format: DetectedFormat }) {
+  switch (format.type) {
+    case "geolocation":
+      return <PreviewGeolocation data={format.data} />;
+    case "isbn":
+      return <PreviewISBN data={format.data} />;
+    case "iban":
+      return <PreviewIBAN data={format.data} />;
+    case "regex":
+      return <PreviewRegex data={format.data} />;
+    case "semanticColor":
+      return <PreviewSemanticColor data={format.data} />;
+    default:
+      return <></>;
+  }
+}
+
 function PreviewJson({
   value,
   format,
@@ -112,6 +144,54 @@ function PreviewColor({
             style={{ backgroundColor: color.hex().toString() }}
           >
             <p className={`text-center text-xl ${textColor}`}>{value}</p>
+          </div>
+        </div>
+      </PreviewBox>
+    </>
+  );
+}
+
+function PreviewSemanticColor({ data }: { data: SemanticColorData }) {
+  const color = new Color(data.hex);
+
+  const textColor = color.isLight() ? "text-slate-800" : "text-slate-100";
+
+  return (
+    <>
+      <PreviewBox>
+        <div className="space-y-3">
+          <div
+            className="flex items-center justify-center w-full h-52 rounded-sm"
+            style={{ backgroundColor: data.hex }}
+          >
+            <div className="text-center">
+              <p className={`text-2xl font-medium ${textColor}`}>
+                {data.name}
+              </p>
+              <p className={`text-lg mt-1 ${textColor} opacity-80`}>
+                {data.hex}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                RGB
+              </p>
+              <p className="font-mono text-sm">
+                rgb({color.red()}, {color.green()}, {color.blue()})
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                HSL
+              </p>
+              <p className="font-mono text-sm">
+                hsl({Math.round(color.hue())},{" "}
+                {Math.round(color.saturationl())}%,{" "}
+                {Math.round(color.lightness())}%)
+              </p>
+            </div>
           </div>
         </div>
       </PreviewBox>
