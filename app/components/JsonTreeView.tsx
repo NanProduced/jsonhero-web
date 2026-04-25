@@ -1,5 +1,5 @@
-import { ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/outline";
-import { useEffect, useRef } from "react";
+import { ChevronDownIcon, ChevronRightIcon, ExclamationIcon } from "@heroicons/react/outline";
+import { useEffect, useMemo, useRef } from "react";
 import {
   useJsonColumnViewAPI,
   useJsonColumnViewState,
@@ -10,6 +10,7 @@ import { VirtualNode } from "~/hooks/useVirtualTree";
 import { CopySelectedNodeShortcut } from "./CopySelectedNode";
 import { Body } from "./Primitives/Body";
 import { Mono } from "./Primitives/Mono";
+import { useSchemaValidationAPI, useSchemaValidationState } from "~/hooks/useSchemaValidation";
 
 export function JsonTreeView() {
   const { selectedNodeId, selectedNodeSource } = useJsonColumnViewState();
@@ -17,7 +18,6 @@ export function JsonTreeView() {
 
   const { tree, parentRef } = useJsonTreeViewContext();
 
-  // Scroll to the selected node when this component is first rendered.
   const scrolledToNodeRef = useRef(false);
 
   useEffect(() => {
@@ -27,12 +27,8 @@ export function JsonTreeView() {
     }
   }, [selectedNodeId, scrolledToNodeRef]);
 
-  // Yup, this is hacky.
-  // This is to prevent the selection not changing the first time you try to move to a new node in the tree
   const focusCount = useRef<number>(0);
 
-  // This focuses and scrolls to the selected node when the selectedNodeId
-  // is set from a source other than this tree (e.g. the search bar, path bar, related values).
   useEffect(() => {
     if (
       tree.focusedNodeId &&
@@ -51,7 +47,6 @@ export function JsonTreeView() {
     }
   }, [tree.focusedNodeId, goToNodeId, selectedNodeId, selectedNodeSource]);
 
-  // This is what syncs the tree view's focused node to the column view selected node
   const previousFocusedNodeId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -123,6 +118,22 @@ function TreeViewNode({
   onToggle?: (node: JsonTreeViewNode, e: MouseEvent) => void;
 }) {
   const { node, virtualItem, depth } = virtualNode;
+  const api = useSchemaValidationAPI();
+  const { validationMode } = useSchemaValidationState();
+
+  const hasErrors = useMemo(() => {
+    if (validationMode !== "external") return false;
+    return api.hasErrorsAtPath(node.id);
+  }, [node.id, api, validationMode]);
+
+  const fieldFrequency = useMemo(() => {
+    const parentPath = node.id.substring(0, node.id.lastIndexOf("."));
+    const parentFreq = api.getFrequencyForPath(parentPath);
+    if (!parentFreq) return null;
+
+    const fieldName = node.id.substring(node.id.lastIndexOf(".") + 1);
+    return parentFreq.frequencies.find((f) => f.fieldName === fieldName);
+  }, [node.id, api]);
 
   const indentClassName = computeTreeNodePaddingClass(depth);
 
@@ -145,6 +156,8 @@ function TreeViewNode({
         className={`h-full flex pl-5 rounded-sm select-none ${
           isSelected
             ? "bg-indigo-700"
+            : hasErrors
+            ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
             : virtualItem.index % 2
             ? "dark:bg-slate-900"
             : "bg-slate-100 bg-opacity-90 dark:bg-slate-800 dark:bg-opacity-30"
@@ -180,34 +193,65 @@ function TreeViewNode({
             </span>
           )}
 
-          <Body
-            className={`${indentClassName} leading-8 truncate whitespace-nowrap pl-2 pr-2 ${
-              isSelected
-                ? "text-slate-100"
-                : "text-slate-700 dark:text-slate-200"
-            }`}
-          >
-            {node.longTitle ?? node.name}
-          </Body>
+          <div className="flex items-center">
+            {hasErrors ? (
+              <ExclamationIcon
+                className={`w-4 h-4 mr-1 ${
+                  isSelected ? "text-red-200" : "text-red-500"
+                }`}
+              />
+            ) : (
+              node.icon && (
+                <span className="mr-2">
+                  <node.icon
+                    className={`h-5 w-5 ${
+                      isSelected
+                        ? "text-slate-100"
+                        : "text-slate-400 dark:text-slate-500"
+                    }`}
+                  />
+                </span>
+              )
+            )}
+
+            <Body
+              className={`${indentClassName} leading-8 truncate whitespace-nowrap pl-2 pr-2 ${
+                isSelected
+                  ? "text-slate-100"
+                  : hasErrors
+                  ? "text-red-700 dark:text-red-300"
+                  : "text-slate-700 dark:text-slate-200"
+              }`}
+            >
+              {node.longTitle ?? node.name}
+            </Body>
+
+            {fieldFrequency && fieldFrequency.frequency < 100 && (
+              <span
+                className={`ml-1 px-1.5 py-0.5 rounded text-xs font-medium ${
+                  isSelected
+                    ? "bg-white/20 text-white"
+                    : fieldFrequency.frequency >= 75
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                    : fieldFrequency.frequency >= 50
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                    : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                }`}
+              >
+                {fieldFrequency.frequency.toFixed(0)}%
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex w-4/6 items-center">
-          <span className="mr-2">
-            {node.icon && (
-              <node.icon
-                className={`h-5 w-5 ${
-                  isSelected
-                    ? "text-slate-100"
-                    : "text-slate-400 dark:text-slate-500"
-                }`}
-              />
-            )}
-          </span>
           {node.subtitle && (
             <Mono
               className={`truncate pr-1 transition ${
                 isSelected
                   ? "text-slate-100"
+                  : hasErrors
+                  ? "text-red-500 dark:text-red-400"
                   : "text-slate-500 dark:text-slate-200"
               }`}
             >
