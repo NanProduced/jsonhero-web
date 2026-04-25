@@ -1,6 +1,12 @@
 import Papa from "papaparse";
 import { FormatConverter, ConversionResult } from "./types";
 
+interface ParseResult {
+  data: any[];
+  errors: any[];
+  meta: any;
+}
+
 export class CsvConverter implements FormatConverter {
   name = "CSV";
   format = "csv";
@@ -57,14 +63,18 @@ export class CsvConverter implements FormatConverter {
 
   convert(content: string): ConversionResult {
     try {
-      const result = Papa.parse(content, {
+      const result = (Papa.parse as any)(content, {
         header: true,
         skipEmptyLines: true,
         dynamicTyping: true,
-      });
+      }) as ParseResult;
 
-      if (result.errors.length > 0) {
-        const errorMessages = result.errors.slice(0, 5).map(err => 
+      const hasFatalErrors = (result.errors || []).filter(
+        (err: any) => err.code !== "TooManyFields" && err.code !== "TooFewFields"
+      );
+
+      if (hasFatalErrors.length > 0) {
+        const errorMessages = hasFatalErrors.slice(0, 5).map((err: any) => 
           `Row ${err.row}: ${err.message}`
         ).join("; ");
         
@@ -74,7 +84,7 @@ export class CsvConverter implements FormatConverter {
         };
       }
 
-      const jsonData = result.data;
+      const jsonData = result.data || [];
       
       return {
         success: true,

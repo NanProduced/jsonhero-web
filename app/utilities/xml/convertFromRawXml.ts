@@ -28,9 +28,9 @@ const serializeXml = (
     return undefined;
   }
 
-  const children = Array.from(node.childNodes).map((child) =>
-    serializeXml(child)
-  );
+  const children = Array.from(node.childNodes)
+    .map((child) => serializeXml(child))
+    .filter((child) => child !== undefined);
 
   const attributes =
     node.attributes &&
@@ -41,36 +41,30 @@ const serializeXml = (
 
   let childObject: any = {};
 
-  if (children.length === 1 && typeof children[0] === "string") {
+  if (children.length === 0) {
+    childObject[nodeName] = "";
+  } else if (children.length === 1 && typeof children[0] === "string") {
     childObject[nodeName] = children[0];
   } else {
     childObject[nodeName] = {};
 
-    // childenUniqueKeys check if children should be processed as array
-    // or should be added as properties of parent object.
-    // e.g: In [{ name: 'foo' }, { name: 'bar' }],
-    // children bear the same "name" key, so parent object will look like:
-    //
-    // parent: {
-    //   $values: [
-    //     { name: 'foo' },
-    //     { name: 'bar' }
-    //   ],
-    //   $attributes: { ... }
-    // }
-    //
-    // In [{ name: 'foo' }, { age: 10 }],
-    // children have different keys and will be merged into parent object:
-    // parent: { name: 'foo', age: 10 }
-    const childenUniqueKeys = new Set(
-      children.map((child: any) => Object.keys(child)[0])
+    const validChildren = children.filter((child) => 
+      child !== null && typeof child === "object" && !Array.isArray(child)
     );
 
-    if (childenUniqueKeys.size === children.length) {
-      childObject[nodeName] = children.reduce(
-        (acc: {}, child: any) => ({ ...acc, ...child }),
-        {}
+    if (validChildren.length > 0) {
+      const childenUniqueKeys = new Set(
+        validChildren.map((child: any) => Object.keys(child)[0])
       );
+
+      if (childenUniqueKeys.size === validChildren.length) {
+        childObject[nodeName] = validChildren.reduce(
+          (acc: {}, child: any) => ({ ...acc, ...child }),
+          {}
+        );
+      } else {
+        childObject[nodeName].$values = children;
+      }
     } else {
       childObject[nodeName].$values = children;
     }
