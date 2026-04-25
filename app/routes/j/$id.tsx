@@ -36,7 +36,9 @@ import {
   setErrorMessage,
   setSuccessMessage,
 } from "~/services/toast.server";
-import { getRandomUserAgent } from '~/utilities/getRandomUserAgent'
+import { getRandomUserAgent } from '~/utilities/getRandomUserAgent';
+import { CompareProvider, useOptionalCompare } from "~/hooks/useCompare";
+import { CompareLayout } from "~/components/CompareLayout";
 
 export const loader: LoaderFunction = async ({ params, request }) => {
   invariant(params.id, "expected params.id");
@@ -90,7 +92,6 @@ export const loader: LoaderFunction = async ({ params, request }) => {
 };
 
 export const action: ActionFunction = async ({ request, params }) => {
-  // Return if the request is not a DELETE
   if (request.method !== "DELETE") {
     return;
   }
@@ -178,7 +179,6 @@ export const meta: MetaFunction = ({
 export default function JsonDocumentRoute() {
   const loaderData = useLoaderData<LoaderData>();
 
-  // Redirect back to `/j/${slug}` if the path is set, that way refreshing the page doesn't go to the path in the url.
   const location = useLocation();
 
   useEffect(() => {
@@ -186,6 +186,22 @@ export default function JsonDocumentRoute() {
       window.history.replaceState({}, "", location.pathname);
     }
   }, [loaderData.path]);
+
+  return (
+    <CompareProvider>
+      <JsonDocumentContent loaderData={loaderData} />
+    </CompareProvider>
+  );
+}
+
+function JsonDocumentContent({ loaderData }: { loaderData: LoaderData }) {
+  const compare = useOptionalCompare();
+
+  useEffect(() => {
+    if (compare) {
+      compare.updateLeftJson(loaderData.json);
+    }
+  }, [compare, loaderData.json]);
 
   return (
     <JsonDocProvider
@@ -199,51 +215,70 @@ export default function JsonDocumentRoute() {
           <JsonColumnViewProvider>
             <JsonSearchProvider>
               <JsonTreeViewProvider overscan={25}>
-                <div>
-                  <div className="block md:hidden fixed bg-black/80 h-screen w-screen z-50 text-white">
-                    <div className="flex flex-col items-center justify-center h-full text-center">
-                      <LargeTitle>JSON Hero only works on desktop</LargeTitle>
-                      <LargeTitle>👇</LargeTitle>
-                      <Body>(For now!)</Body>
-                      <a
-                        href="/"
-                        className="mt-8 text-white bg-lime-500 rounded-sm px-4 py-2"
-                      >
-                        Back to Home
-                      </a>
-                    </div>
-                  </div>
-                  <div className="h-screen flex flex-col sm:overflow-hidden">
-                    {!loaderData.minimal && <Header />}
-                    <div className="bg-slate-50 flex-grow transition dark:bg-slate-900 overflow-y-auto">
-                      <div className="main-container flex justify-items-stretch h-full">
-                        <SideBar />
-                        <JsonView>
-                          <Outlet />
-                        </JsonView>
-
-                        <Resizable
-                          isHorizontal={true}
-                          initialSize={500}
-                          minimumSize={280}
-                          maximumSize={900}
-                        >
-                          <div className="info-panel flex-grow h-full">
-                            <InfoPanel />
-                          </div>
-                        </Resizable>
-                      </div>
-                    </div>
-
-                    <Footer></Footer>
-                  </div>
-                </div>
+                <DocumentView loaderData={loaderData} />
               </JsonTreeViewProvider>
             </JsonSearchProvider>
           </JsonColumnViewProvider>
         </JsonSchemaProvider>
       </JsonProvider>
     </JsonDocProvider>
+  );
+}
+
+function DocumentView({ loaderData }: { loaderData: LoaderData }) {
+  const compare = useOptionalCompare();
+  const isCompareMode = compare?.isCompareMode ?? false;
+
+  return (
+    <div>
+      <div className="block md:hidden fixed bg-black/80 h-screen w-screen z-50 text-white">
+        <div className="flex flex-col items-center justify-center h-full text-center">
+          <LargeTitle>JSON Hero only works on desktop</LargeTitle>
+          <LargeTitle>👇</LargeTitle>
+          <Body>(For now!)</Body>
+          <a
+            href="/"
+            className="mt-8 text-white bg-lime-500 rounded-sm px-4 py-2"
+          >
+            Back to Home
+          </a>
+        </div>
+      </div>
+      <div className="h-screen flex flex-col sm:overflow-hidden">
+        {!loaderData.minimal && <Header />}
+        <div className="bg-slate-50 flex-grow transition dark:bg-slate-900 overflow-y-auto">
+          {isCompareMode ? (
+            <CompareLayout loaderData={loaderData} />
+          ) : (
+            <NormalLayout loaderData={loaderData} />
+          )}
+        </div>
+
+        <Footer></Footer>
+      </div>
+    </div>
+  );
+}
+
+function NormalLayout({ loaderData }: { loaderData: LoaderData }) {
+  return (
+    <div className="main-container flex justify-items-stretch h-full">
+      <SideBar />
+      <JsonView>
+        <Outlet />
+      </JsonView>
+
+      <Resizable
+        isHorizontal={true}
+        initialSize={500}
+        minimumSize={280}
+        maximumSize={900}
+      >
+        <div className="info-panel flex-grow h-full">
+          <InfoPanel />
+        </div>
+      </Resizable>
+    </div>
   );
 }
 
