@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Body } from "~/components/Primitives/Body";
 import { SmallBody } from "~/components/Primitives/SmallBody";
 import { IBANData, IBAN_COUNTRIES } from "~/utilities/formatDetectors";
@@ -114,36 +114,28 @@ function getCountryColors(countryCode: string): { primary: string; secondary: st
   };
 }
 
-function isFlagEmojiSupported(): boolean {
-  if (typeof window === "undefined") return true;
-  
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return true;
-  
-  const flag = "🇺🇳";
-  ctx.font = "16px Arial";
-  
-  const metrics = ctx.measureText(flag);
-  const width = metrics.width;
-  
-  return width > 8;
-}
-
 export function PreviewIBAN({ data }: PreviewIBANProps) {
-  const [flagSupported, setFlagSupported] = useState(true);
+  const [imageError, setImageError] = useState(false);
   const bankCode = extractBankCode(data.iban, data.countryCode);
   const bankIdentifierInfo = BANK_IDENTIFIERS[data.countryCode];
   const colors = getCountryColors(data.countryCode);
 
-  useEffect(() => {
-    setFlagSupported(isFlagEmojiSupported());
-  }, []);
+  const handleImageError = () => {
+    setImageError(true);
+  };
 
   const CountryIndicator = () => {
-    if (flagSupported) {
+    if (!imageError && data.flagUrl) {
       return (
-        <span className="text-5xl leading-none">{data.flag}</span>
+        <div className="relative w-16 h-12 rounded-sm overflow-hidden flex items-center justify-center border border-slate-300 dark:border-slate-600">
+          <img
+            src={data.flagUrl}
+            alt={`${data.countryName} flag`}
+            className="w-full h-full object-cover"
+            onError={handleImageError}
+            loading="lazy"
+          />
+        </div>
       );
     }
 
