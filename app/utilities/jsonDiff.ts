@@ -26,7 +26,7 @@ function isPrimitive(value: unknown): boolean {
   );
 }
 
-function deepEqual(a: unknown, b: unknown): boolean {
+export function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
 
   if (isPrimitive(a) || isPrimitive(b)) {

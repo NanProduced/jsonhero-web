@@ -1,4 +1,4 @@
-import { ShareIcon, PlusIcon, TrashIcon } from "@heroicons/react/outline";
+import { ShareIcon, PlusIcon, TrashIcon, RefreshIcon } from "@heroicons/react/outline";
 import { DocumentTitle } from "./DocumentTitle";
 import { DiscordIconTransparent } from "./Icons/DiscordIconTransparent";
 import { EmailIconTransparent } from "./Icons/EmailIconTransparent";
@@ -6,6 +6,7 @@ import { GithubStar } from "./UI/GithubStar";
 import { Logo } from "./Icons/Logo";
 import { Share } from "./Share";
 import { NewDocument } from "./NewDocument";
+import { CompareDialog } from "./CompareDialog";
 import {
   Popover,
   PopoverArrow,
@@ -15,9 +16,12 @@ import {
 import { Form } from "remix";
 import { useJsonDoc } from "~/hooks/useJsonDoc";
 import { LogoTriggerdotdev } from "./Icons/LogoTriggerdotdev";
+import { useOptionalCompare } from "~/hooks/useCompare";
 
 export function Header() {
   const { doc } = useJsonDoc();
+  const compare = useOptionalCompare();
+  const isCompareMode = compare?.isCompareMode ?? false;
 
   return (
     <header className="flex items-center justify-between w-screen h-[40px] bg-indigo-700 dark:bg-slate-800 border-b-[1px] border-slate-600">
@@ -30,6 +34,27 @@ export function Header() {
       </div>
       <DocumentTitle />
       <ol className="flex text-sm items-center gap-2 px-4">
+        {isCompareMode && (
+          <button
+            onClick={() => compare?.exitCompareMode()}
+            className="flex items-center justify-center py-1 bg-orange-500 text-slate-800 bg-opacity-90 text-base font-bold px-2 rounded uppercase hover:cursor-pointer hover:bg-opacity-100 transition"
+          >
+            <RefreshIcon className="w-4 h-4 mr-0.5"></RefreshIcon>
+            Exit Compare
+          </button>
+        )}
+
+        {!isCompareMode && (
+          <CompareDialog
+            trigger={
+              <button className="flex items-center justify-center py-1 bg-teal-500 text-slate-800 bg-opacity-90 text-base font-bold px-2 rounded uppercase hover:cursor-pointer hover:bg-opacity-100 transition">
+                <ShareIcon className="w-4 h-4 mr-0.5"></ShareIcon>
+                Compare
+              </button>
+            }
+          />
+        )}
+
         {!doc.readOnly && (
           <Form
             method="delete"
