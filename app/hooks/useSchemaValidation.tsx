@@ -13,6 +13,7 @@ import {
 import invariant from "tiny-invariant";
 import { useJson } from "~/hooks/useJson";
 import {
+  FieldFrequency,
   FieldFrequencyResult,
   SchemaValidationError,
   SchemaValidationResult,
@@ -21,6 +22,8 @@ import {
   parseSchema,
   hasErrorsAtPath,
   getErrorsForPath,
+  findArrayFrequencyForField,
+  findParentArrayPath,
 } from "~/utilities/schemaUtils";
 
 export type ValidationMode = "inferred" | "external";
@@ -45,6 +48,8 @@ export interface SchemaValidationAPI {
   getErrorsForPath: (path: string) => SchemaValidationError[];
   hasErrorsAtPath: (path: string) => boolean;
   getFrequencyForPath: (path: string) => FieldFrequencyResult | undefined;
+  findArrayFrequencyForField: (path: string) => FieldFrequency | null;
+  findParentArrayPath: (path: string) => string | null;
 }
 
 type SchemaValidationContextType = {
@@ -150,6 +155,20 @@ export function SchemaValidationProvider({ children }: { children: ReactNode }) 
     [fieldFrequencies]
   );
 
+  const findArrayFrequencyForFieldFn = useCallback(
+    (path: string): FieldFrequency | null => {
+      return findArrayFrequencyForField(fieldFrequencies, path);
+    },
+    [fieldFrequencies]
+  );
+
+  const findParentArrayPathFn = useCallback(
+    (path: string): string | null => {
+      return findParentArrayPath(fieldFrequencies, path);
+    },
+    [fieldFrequencies]
+  );
+
   const api: SchemaValidationAPI = useMemo(
     () => ({
       setValidationMode,
@@ -161,6 +180,8 @@ export function SchemaValidationProvider({ children }: { children: ReactNode }) 
       getErrorsForPath: getErrorsForPathFn,
       hasErrorsAtPath: hasErrorsAtPathFn,
       getFrequencyForPath,
+      findArrayFrequencyForField: findArrayFrequencyForFieldFn,
+      findParentArrayPath: findParentArrayPathFn,
     }),
     [
       setValidationMode,
@@ -170,6 +191,8 @@ export function SchemaValidationProvider({ children }: { children: ReactNode }) 
       getErrorsForPathFn,
       hasErrorsAtPathFn,
       getFrequencyForPath,
+      findArrayFrequencyForFieldFn,
+      findParentArrayPathFn,
     ]
   );
 
