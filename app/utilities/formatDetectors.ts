@@ -40,6 +40,7 @@ export interface GeolocationData {
   latitude: number;
   longitude: number;
   original: string;
+  format: "decimal" | "dms";
 }
 
 export interface ISBNData {
@@ -68,23 +69,105 @@ export interface SemanticColorData {
   hex: string;
 }
 
-const GEOLOCATION_PATTERNS = [
-  /^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/,
-  /^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/,
-  /^(-?\d+\.?\d*)°?\s*([NS])?\s*,\s*(-?\d+\.?\d*)°?\s*([EW])?$/i,
+function dmsToDecimal(
+  degrees: number,
+  minutes: number = 0,
+  seconds: number = 0,
+  direction: string = "N"
+): number {
+  let decimal = degrees + minutes / 60 + seconds / 3600;
+  if (direction === "S" || direction === "W") {
+    decimal = -decimal;
+  }
+  return decimal;
+}
+
+const GEOLOCATION_PATTERNS: Array<{
+  pattern: RegExp;
+  parser: (match: RegExpMatchArray) => { lat: number; lng: number; format: "decimal" | "dms" } | null;
+}> = [
+  {
+    pattern: /^(-?\d+\.?\d*)\s*[,，]\s*(-?\d+\.?\d*)$/,
+    parser: (match) => {
+      const lat = parseFloat(match[1]);
+      const lng = parseFloat(match[2]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { lat, lng, format: "decimal" as const };
+      }
+      return null;
+    },
+  },
+  {
+    pattern: /^(-?\d+\.?\d*)°?\s*([NSns])?\s*[,，]\s*(-?\d+\.?\d*)°?\s*([EWew])?$/,
+    parser: (match) => {
+      let lat = parseFloat(match[1]);
+      let lng = parseFloat(match[3]);
+      
+      if (match[2] && match[2].toUpperCase() === 'S') lat = -Math.abs(lat);
+      if (match[4] && match[4].toUpperCase() === 'W') lng = -Math.abs(lng);
+      
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { lat, lng, format: "decimal" as const };
+      }
+      return null;
+    },
+  },
+  {
+    pattern: /^(\d+)°\s*(\d+)'?\s*(\d+\.?\d*)?["”]?\s*([NSns])?\s*[,，]\s*(\d+)°\s*(\d+)'?\s*(\d+\.?\d*)?["”]?\s*([EWew])?$/,
+    parser: (match) => {
+      const latDeg = parseInt(match[1]);
+      const latMin = parseInt(match[2]);
+      const latSec = match[3] ? parseFloat(match[3]) : 0;
+      const latDir = match[4]?.toUpperCase() || "N";
+      
+      const lngDeg = parseInt(match[5]);
+      const lngMin = parseInt(match[6]);
+      const lngSec = match[7] ? parseFloat(match[7]) : 0;
+      const lngDir = match[8]?.toUpperCase() || "E";
+      
+      const lat = dmsToDecimal(latDeg, latMin, latSec, latDir);
+      const lng = dmsToDecimal(lngDeg, lngMin, lngSec, lngDir);
+      
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { lat, lng, format: "dms" as const };
+      }
+      return null;
+    },
+  },
+  {
+    pattern: /^(\d+)°\s*(\d+\.?\d*)'?\s*([NSns])?\s*[,，]\s*(\d+)°\s*(\d+\.?\d*)'?\s*([EWew])?$/,
+    parser: (match) => {
+      const latDeg = parseInt(match[1]);
+      const latMin = parseFloat(match[2]);
+      const latDir = match[3]?.toUpperCase() || "N";
+      
+      const lngDeg = parseInt(match[4]);
+      const lngMin = parseFloat(match[5]);
+      const lngDir = match[6]?.toUpperCase() || "E";
+      
+      const lat = dmsToDecimal(latDeg, latMin, 0, latDir);
+      const lng = dmsToDecimal(lngDeg, lngMin, 0, lngDir);
+      
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { lat, lng, format: "dms" as const };
+      }
+      return null;
+    },
+  },
 ];
 
 export function isGeolocation(value: string): boolean {
   const trimmed = value.trim();
-  for (const pattern of GEOLOCATION_PATTERNS) {
-    if (pattern.test(trimmed)) {
-      const data = parseGeolocation(trimmed);
-      if (data) {
+  for (const { pattern, parser } of GEOLOCATION_PATTERNS) {
+    const match = trimmed.match(pattern);
+    if (match) {
+      const result = parser(match);
+      if (result) {
         return (
-          data.latitude >= -90 &&
-          data.latitude <= 90 &&
-          data.longitude >= -180 &&
-          data.longitude <= 180
+          result.lat >= -90 &&
+          result.lat <= 90 &&
+          result.lng >= -180 &&
+          result.lng <= 180
         );
       }
     }
@@ -95,29 +178,16 @@ export function isGeolocation(value: string): boolean {
 export function parseGeolocation(value: string): GeolocationData | null {
   const trimmed = value.trim();
   
-  for (const pattern of GEOLOCATION_PATTERNS) {
+  for (const { pattern, parser } of GEOLOCATION_PATTERNS) {
     const match = trimmed.match(pattern);
     if (match) {
-      let lat: number, lng: number;
-      
-      if (match.length === 3) {
-        lat = parseFloat(match[1]);
-        lng = parseFloat(match[2]);
-      } else if (match.length === 5) {
-        lat = parseFloat(match[1]);
-        lng = parseFloat(match[3]);
-        
-        if (match[2] && match[2].toUpperCase() === 'S') lat = -Math.abs(lat);
-        if (match[4] && match[4].toUpperCase() === 'W') lng = -Math.abs(lng);
-      } else {
-        continue;
-      }
-      
-      if (!isNaN(lat) && !isNaN(lng)) {
+      const result = parser(match);
+      if (result) {
         return {
-          latitude: lat,
-          longitude: lng,
+          latitude: result.lat,
+          longitude: result.lng,
           original: trimmed,
+          format: result.format,
         };
       }
     }
@@ -126,19 +196,23 @@ export function parseGeolocation(value: string): GeolocationData | null {
   return null;
 }
 
-const ISBN10_PATTERN = /^(?:ISBN(?:-10)?:?\s*)?(\d{9}[\dX])$/i;
-const ISBN13_PATTERN = /^(?:ISBN(?:-13)?:?\s*)?(97[89]\d{10})$/i;
-const ISBN_WITH_HYPHENS = /^(?:ISBN(?:-1[03])?:?\s*)?([\d-]{10,17}[\dX])$/i;
+const ISBN_RAW_PATTERN = /^(?:ISBN(?:-1[03])?:?\s*)?([\dX-]{10,})$/i;
+const ISBN10_CLEAN = /^\d{9}[\dX]$/i;
+const ISBN13_CLEAN = /^97[89]\d{10}$/;
 
 export function isISBN(value: string): boolean {
-  const cleaned = value.replace(/[-\s]/g, '').toUpperCase();
+  const match = value.trim().match(ISBN_RAW_PATTERN);
+  if (!match) return false;
   
-  if (ISBN10_PATTERN.test(cleaned)) {
-    return validateISBN10(cleaned.match(ISBN10_PATTERN)![1]);
+  const cleaned = match[1].replace(/[-\s]/g, '').toUpperCase();
+  
+  if (ISBN13_CLEAN.test(cleaned)) {
+    return validateISBN13(cleaned);
   }
-  if (ISBN13_PATTERN.test(cleaned)) {
-    return validateISBN13(cleaned.match(ISBN13_PATTERN)![1]);
+  if (ISBN10_CLEAN.test(cleaned)) {
+    return validateISBN10(cleaned);
   }
+  
   return false;
 }
 
@@ -169,20 +243,20 @@ function validateISBN13(isbn: string): boolean {
 }
 
 export function parseISBN(value: string): ISBNData | null {
-  const cleaned = value.replace(/[-\s]/g, '').toUpperCase();
+  const match = value.trim().match(ISBN_RAW_PATTERN);
+  if (!match) return null;
+  
+  const cleaned = match[1].replace(/[-\s]/g, '').toUpperCase();
   
   let isbn10: string | undefined;
   let isbn13: string | undefined;
   let type: "ISBN-10" | "ISBN-13";
   
-  const match10 = cleaned.match(ISBN10_PATTERN);
-  const match13 = cleaned.match(ISBN13_PATTERN);
-  
-  if (match13 && validateISBN13(match13[1])) {
-    isbn13 = match13[1];
+  if (ISBN13_CLEAN.test(cleaned) && validateISBN13(cleaned)) {
+    isbn13 = cleaned;
     type = "ISBN-13";
-  } else if (match10 && validateISBN10(match10[1])) {
-    isbn10 = match10[1];
+  } else if (ISBN10_CLEAN.test(cleaned) && validateISBN10(cleaned)) {
+    isbn10 = cleaned;
     type = "ISBN-10";
   } else {
     return null;
@@ -196,86 +270,86 @@ export function parseISBN(value: string): ISBNData | null {
   };
 }
 
-const IBAN_PATTERN = /^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$/;
+const IBAN_PATTERN = /^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$/i;
 
-export const IBAN_COUNTRIES: Record<string, { name: string; length: number; flag: string }> = {
-  AD: { name: "Andorra", length: 24, flag: "🇦🇩" },
-  AE: { name: "United Arab Emirates", length: 23, flag: "🇦🇪" },
-  AL: { name: "Albania", length: 28, flag: "🇦🇱" },
-  AT: { name: "Austria", length: 20, flag: "🇦🇹" },
-  AZ: { name: "Azerbaijan", length: 28, flag: "🇦🇿" },
-  BA: { name: "Bosnia and Herzegovina", length: 20, flag: "🇧🇦" },
-  BE: { name: "Belgium", length: 16, flag: "🇧🇪" },
-  BG: { name: "Bulgaria", length: 22, flag: "🇧🇬" },
-  BH: { name: "Bahrain", length: 22, flag: "🇧🇭" },
-  BR: { name: "Brazil", length: 29, flag: "🇧🇷" },
-  BY: { name: "Belarus", length: 28, flag: "🇧🇾" },
-  CH: { name: "Switzerland", length: 21, flag: "🇨🇭" },
-  CR: { name: "Costa Rica", length: 22, flag: "🇨🇷" },
-  CY: { name: "Cyprus", length: 28, flag: "🇨🇾" },
-  CZ: { name: "Czech Republic", length: 24, flag: "🇨🇿" },
-  DE: { name: "Germany", length: 22, flag: "🇩🇪" },
-  DK: { name: "Denmark", length: 18, flag: "🇩🇰" },
-  DO: { name: "Dominican Republic", length: 28, flag: "🇩🇴" },
-  EE: { name: "Estonia", length: 20, flag: "🇪🇪" },
-  EG: { name: "Egypt", length: 29, flag: "🇪🇬" },
-  ES: { name: "Spain", length: 24, flag: "🇪🇸" },
-  FI: { name: "Finland", length: 18, flag: "🇫🇮" },
-  FO: { name: "Faroe Islands", length: 18, flag: "🇫🇴" },
-  FR: { name: "France", length: 27, flag: "🇫🇷" },
-  GB: { name: "United Kingdom", length: 22, flag: "🇬🇧" },
-  GE: { name: "Georgia", length: 22, flag: "🇬🇪" },
-  GI: { name: "Gibraltar", length: 23, flag: "🇬🇮" },
-  GL: { name: "Greenland", length: 18, flag: "🇬🇱" },
-  GR: { name: "Greece", length: 27, flag: "🇬🇷" },
-  GT: { name: "Guatemala", length: 28, flag: "🇬🇹" },
-  HR: { name: "Croatia", length: 21, flag: "🇭🇷" },
-  HU: { name: "Hungary", length: 28, flag: "🇭🇺" },
-  IE: { name: "Ireland", length: 22, flag: "🇮🇪" },
-  IL: { name: "Israel", length: 23, flag: "🇮🇱" },
-  IM: { name: "Isle of Man", length: 22, flag: "🇮🇲" },
-  IQ: { name: "Iraq", length: 23, flag: "🇮🇶" },
-  IS: { name: "Iceland", length: 26, flag: "🇮🇸" },
-  IT: { name: "Italy", length: 27, flag: "🇮🇹" },
-  JO: { name: "Jordan", length: 30, flag: "🇯🇴" },
-  KW: { name: "Kuwait", length: 30, flag: "🇰🇼" },
-  KZ: { name: "Kazakhstan", length: 20, flag: "🇰🇿" },
-  LB: { name: "Lebanon", length: 28, flag: "🇱🇧" },
-  LI: { name: "Liechtenstein", length: 21, flag: "🇱🇮" },
-  LT: { name: "Lithuania", length: 20, flag: "🇱🇹" },
-  LU: { name: "Luxembourg", length: 20, flag: "🇱🇺" },
-  LV: { name: "Latvia", length: 21, flag: "🇱🇻" },
-  MC: { name: "Monaco", length: 27, flag: "🇲🇨" },
-  MD: { name: "Moldova", length: 24, flag: "🇲🇩" },
-  ME: { name: "Montenegro", length: 22, flag: "🇲🇪" },
-  MK: { name: "North Macedonia", length: 19, flag: "🇲🇰" },
-  MR: { name: "Mauritania", length: 27, flag: "🇲🇷" },
-  MT: { name: "Malta", length: 31, flag: "🇲🇹" },
-  MU: { name: "Mauritius", length: 30, flag: "🇲🇺" },
-  NL: { name: "Netherlands", length: 18, flag: "🇳🇱" },
-  NO: { name: "Norway", length: 15, flag: "🇳🇴" },
-  PK: { name: "Pakistan", length: 24, flag: "🇵🇰" },
-  PL: { name: "Poland", length: 28, flag: "🇵🇱" },
-  PS: { name: "Palestine", length: 29, flag: "🇵🇸" },
-  PT: { name: "Portugal", length: 25, flag: "🇵🇹" },
-  QA: { name: "Qatar", length: 29, flag: "🇶🇦" },
-  RO: { name: "Romania", length: 24, flag: "🇷🇴" },
-  RS: { name: "Serbia", length: 22, flag: "🇷🇸" },
-  SA: { name: "Saudi Arabia", length: 24, flag: "🇸🇦" },
-  SC: { name: "Seychelles", length: 31, flag: "🇸🇨" },
-  SE: { name: "Sweden", length: 24, flag: "🇸🇪" },
-  SI: { name: "Slovenia", length: 19, flag: "🇸🇮" },
-  SK: { name: "Slovakia", length: 24, flag: "🇸🇰" },
-  SM: { name: "San Marino", length: 27, flag: "🇸🇲" },
-  ST: { name: "Sao Tome and Principe", length: 25, flag: "🇸🇹" },
-  SV: { name: "El Salvador", length: 28, flag: "🇸🇻" },
-  TL: { name: "Timor-Leste", length: 23, flag: "🇹🇱" },
-  TN: { name: "Tunisia", length: 24, flag: "🇹🇳" },
-  TR: { name: "Turkey", length: 26, flag: "🇹🇷" },
-  UA: { name: "Ukraine", length: 29, flag: "🇺🇦" },
-  VA: { name: "Vatican City", length: 22, flag: "🇻🇦" },
-  VG: { name: "British Virgin Islands", length: 24, flag: "🇻🇬" },
-  XK: { name: "Kosovo", length: 20, flag: "🇽🇰" },
+export const IBAN_COUNTRIES: Record<string, { name: string; length: number; flag: string; color: string }> = {
+  AD: { name: "Andorra", length: 24, flag: "🇦🇩", color: "#10069F" },
+  AE: { name: "United Arab Emirates", length: 23, flag: "🇦🇪", color: "#00732F" },
+  AL: { name: "Albania", length: 28, flag: "🇦🇱", color: "#CC0033" },
+  AT: { name: "Austria", length: 20, flag: "🇦🇹", color: "#ED2939" },
+  AZ: { name: "Azerbaijan", length: 28, flag: "🇦🇿", color: "#00B5E2" },
+  BA: { name: "Bosnia and Herzegovina", length: 20, flag: "🇧🇦", color: "#002395" },
+  BE: { name: "Belgium", length: 16, flag: "🇧🇪", color: "#FAE042" },
+  BG: { name: "Bulgaria", length: 22, flag: "🇧🇬", color: "#00966E" },
+  BH: { name: "Bahrain", length: 22, flag: "🇧🇭", color: "#CE1126" },
+  BR: { name: "Brazil", length: 29, flag: "🇧🇷", color: "#009C3B" },
+  BY: { name: "Belarus", length: 28, flag: "🇧🇾", color: "#D22730" },
+  CH: { name: "Switzerland", length: 21, flag: "🇨🇭", color: "#FF0000" },
+  CR: { name: "Costa Rica", length: 22, flag: "🇨🇷", color: "#002B7F" },
+  CY: { name: "Cyprus", length: 28, flag: "🇨🇾", color: "#D47500" },
+  CZ: { name: "Czech Republic", length: 24, flag: "🇨🇿", color: "#D7141A" },
+  DE: { name: "Germany", length: 22, flag: "🇩🇪", color: "#000000" },
+  DK: { name: "Denmark", length: 18, flag: "🇩🇰", color: "#C8102E" },
+  DO: { name: "Dominican Republic", length: 28, flag: "🇩🇴", color: "#00247D" },
+  EE: { name: "Estonia", length: 20, flag: "🇪🇪", color: "#0072CE" },
+  EG: { name: "Egypt", length: 29, flag: "🇪🇬", color: "#CE1126" },
+  ES: { name: "Spain", length: 24, flag: "🇪🇸", color: "#AA151B" },
+  FI: { name: "Finland", length: 18, flag: "🇫🇮", color: "#002F6C" },
+  FO: { name: "Faroe Islands", length: 18, flag: "🇫🇴", color: "#005EB8" },
+  FR: { name: "France", length: 27, flag: "🇫🇷", color: "#002395" },
+  GB: { name: "United Kingdom", length: 22, flag: "🇬🇧", color: "#012169" },
+  GE: { name: "Georgia", length: 22, flag: "🇬🇪", color: "#FFFFFF" },
+  GI: { name: "Gibraltar", length: 23, flag: "🇬🇮", color: "#002D81" },
+  GL: { name: "Greenland", length: 18, flag: "🇬🇱", color: "#FFFFFF" },
+  GR: { name: "Greece", length: 27, flag: "🇬🇷", color: "#0D5EAF" },
+  GT: { name: "Guatemala", length: 28, flag: "🇬🇹", color: "#4997D0" },
+  HR: { name: "Croatia", length: 21, flag: "🇭🇷", color: "#FF0000" },
+  HU: { name: "Hungary", length: 28, flag: "🇭🇺", color: "#CD2A3E" },
+  IE: { name: "Ireland", length: 22, flag: "🇮🇪", color: "#009A49" },
+  IL: { name: "Israel", length: 23, flag: "🇮🇱", color: "#0038B8" },
+  IM: { name: "Isle of Man", length: 22, flag: "🇮🇲", color: "#C8102E" },
+  IQ: { name: "Iraq", length: 23, flag: "🇮🇶", color: "#CE1126" },
+  IS: { name: "Iceland", length: 26, flag: "🇮🇸", color: "#02529C" },
+  IT: { name: "Italy", length: 27, flag: "🇮🇹", color: "#009246" },
+  JO: { name: "Jordan", length: 30, flag: "🇯🇴", color: "#007A3D" },
+  KW: { name: "Kuwait", length: 30, flag: "🇰🇼", color: "#007A3D" },
+  KZ: { name: "Kazakhstan", length: 20, flag: "🇰🇿", color: "#00AFCA" },
+  LB: { name: "Lebanon", length: 28, flag: "🇱🇧", color: "#ED1C24" },
+  LI: { name: "Liechtenstein", length: 21, flag: "🇱🇮", color: "#002395" },
+  LT: { name: "Lithuania", length: 20, flag: "🇱🇹", color: "#006A44" },
+  LU: { name: "Luxembourg", length: 20, flag: "🇱🇺", color: "#00A3E0" },
+  LV: { name: "Latvia", length: 21, flag: "🇱🇻", color: "#9E3039" },
+  MC: { name: "Monaco", length: 27, flag: "🇲🇨", color: "#CE1126" },
+  MD: { name: "Moldova", length: 24, flag: "🇲🇩", color: "#0051BA" },
+  ME: { name: "Montenegro", length: 22, flag: "🇲🇪", color: "#C40308" },
+  MK: { name: "North Macedonia", length: 19, flag: "🇲🇰", color: "#D20000" },
+  MR: { name: "Mauritania", length: 27, flag: "🇲🇷", color: "#006400" },
+  MT: { name: "Malta", length: 31, flag: "🇲🇹", color: "#CF142B" },
+  MU: { name: "Mauritius", length: 30, flag: "🇲🇺", color: "#EA2839" },
+  NL: { name: "Netherlands", length: 18, flag: "🇳🇱", color: "#AE1C28" },
+  NO: { name: "Norway", length: 15, flag: "🇳🇴", color: "#BA0C2F" },
+  PK: { name: "Pakistan", length: 24, flag: "🇵🇰", color: "#01411C" },
+  PL: { name: "Poland", length: 28, flag: "🇵🇱", color: "#DC143C" },
+  PS: { name: "Palestine", length: 29, flag: "🇵🇸", color: "#007A3D" },
+  PT: { name: "Portugal", length: 25, flag: "🇵🇹", color: "#006600" },
+  QA: { name: "Qatar", length: 29, flag: "🇶🇦", color: "#8D1B3D" },
+  RO: { name: "Romania", length: 24, flag: "🇷🇴", color: "#002B7F" },
+  RS: { name: "Serbia", length: 22, flag: "🇷🇸", color: "#0C4076" },
+  SA: { name: "Saudi Arabia", length: 24, flag: "🇸🇦", color: "#006C35" },
+  SC: { name: "Seychelles", length: 31, flag: "🇸🇨", color: "#003A8C" },
+  SE: { name: "Sweden", length: 24, flag: "🇸🇪", color: "#004B87" },
+  SI: { name: "Slovenia", length: 19, flag: "🇸🇮", color: "#0057A8" },
+  SK: { name: "Slovakia", length: 24, flag: "🇸🇰", color: "#02468C" },
+  SM: { name: "San Marino", length: 27, flag: "🇸🇲", color: "#5E96D0" },
+  ST: { name: "Sao Tome and Principe", length: 25, flag: "🇸🇹", color: "#129647" },
+  SV: { name: "El Salvador", length: 28, flag: "🇸🇻", color: "#003893" },
+  TL: { name: "Timor-Leste", length: 23, flag: "🇹🇱", color: "#FF0000" },
+  TN: { name: "Tunisia", length: 24, flag: "🇹🇳", color: "#E70013" },
+  TR: { name: "Turkey", length: 26, flag: "🇹🇷", color: "#E30A17" },
+  UA: { name: "Ukraine", length: 29, flag: "🇺🇦", color: "#005BBB" },
+  VA: { name: "Vatican City", length: 22, flag: "🇻🇦", color: "#FFE600" },
+  VG: { name: "British Virgin Islands", length: 24, flag: "🇻🇬", color: "#00247D" },
+  XK: { name: "Kosovo", length: 20, flag: "🇽🇰", color: "#1A52B1" },
 };
 
 export function isIBAN(value: string): boolean {
@@ -340,7 +414,28 @@ export function parseIBAN(value: string): IBANData | null {
   };
 }
 
-const REGEX_DELIMITED_PATTERN = /^\/(.*)\/([gimsuy]*)$/;
+const REGEX_DELIMITED_PATTERN = /^\/(.*)\/([gimsuy]*)$/s;
+
+const STRONG_REGEX_INDICATORS = [
+  /\^/,
+  /\$/,
+  /\*/,
+  /\+/,
+  /\?[^a-zA-Z0-9]/,
+  /\[.*\]/,
+  /\(.*\)/,
+  /\{.*\}/,
+  /\|/,
+  /\\[dDwWsSbB]/,
+  /\\[\\^$.|?*+()\[\]{}]/,
+];
+
+const LIKELY_NON_REGEX_PATTERNS = [
+  /^v?\d+\.\d+(\.\d+)?([-.][a-zA-Z0-9]+)?$/,
+  /^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)+$/,
+  /^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\/[^\s]*)?$/,
+  /^[a-zA-Z0-9_]+$/,
+];
 
 export function isRegex(value: string): boolean {
   const trimmed = value.trim();
@@ -357,19 +452,30 @@ export function isRegex(value: string): boolean {
     }
   }
   
-  if (trimmed.length > 0 && trimmed.length < 100) {
-    const hasRegexChars = /[.*+?^${}()|[\]\\]/.test(trimmed);
-    if (hasRegexChars) {
-      try {
-        new RegExp(trimmed);
-        return true;
-      } catch {
-        return false;
-      }
+  for (const pattern of LIKELY_NON_REGEX_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return false;
     }
   }
   
-  return false;
+  let hasStrongIndicator = false;
+  for (const indicator of STRONG_REGEX_INDICATORS) {
+    if (indicator.test(trimmed)) {
+      hasStrongIndicator = true;
+      break;
+    }
+  }
+  
+  if (!hasStrongIndicator) {
+    return false;
+  }
+  
+  try {
+    new RegExp(trimmed);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function parseRegex(value: string): RegexData {
