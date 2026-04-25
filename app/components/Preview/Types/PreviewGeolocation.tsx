@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Body } from "~/components/Primitives/Body";
 import { SmallBody } from "~/components/Primitives/SmallBody";
 import { GeolocationData } from "~/utilities/formatDetectors";
@@ -70,10 +70,12 @@ function loadLeaflet(): Promise<void> {
 export function PreviewGeolocation({ data }: PreviewGeolocationProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
   const [leafletReady, setLeafletReady] = useState(false);
   const [mapError, setMapError] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const prevCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") {
@@ -101,41 +103,6 @@ export function PreviewGeolocation({ data }: PreviewGeolocationProps) {
     };
   }, []);
 
-  const initMap = useCallback(() => {
-    if (!mapRef.current || !window.L || mapInstanceRef.current) {
-      return;
-    }
-
-    try {
-      const L = window.L;
-
-      const map = L.map(mapRef.current, {
-        center: [data.latitude, data.longitude],
-        zoom: 13,
-        zoomControl: true,
-        attributionControl: true,
-      });
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19,
-      }).addTo(map);
-
-      L.marker([data.latitude, data.longitude]).addTo(map);
-
-      mapInstanceRef.current = map;
-
-      setTimeout(() => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.invalidateSize();
-        }
-      }, 100);
-    } catch (err) {
-      setMapError(true);
-    }
-  }, [data.latitude, data.longitude]);
-
   useEffect(() => {
     if (!isVisible) return;
 
@@ -148,18 +115,74 @@ export function PreviewGeolocation({ data }: PreviewGeolocationProps) {
       });
 
     return () => {
+      if (markerRef.current) {
+        markerRef.current = null;
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
+      prevCoordsRef.current = null;
     };
   }, [isVisible]);
 
   useEffect(() => {
-    if (leafletReady && mapRef.current && !mapInstanceRef.current) {
-      initMap();
+    if (!leafletReady || !mapRef.current || !window.L) return;
+
+    const L = window.L;
+
+    try {
+      const coordsChanged =
+        !prevCoordsRef.current ||
+        prevCoordsRef.current.lat !== data.latitude ||
+        prevCoordsRef.current.lng !== data.longitude;
+
+      if (!coordsChanged) return;
+
+      prevCoordsRef.current = {
+        lat: data.latitude,
+        lng: data.longitude,
+      };
+
+      if (!mapInstanceRef.current) {
+        const map = L.map(mapRef.current, {
+          center: [data.latitude, data.longitude],
+          zoom: 13,
+          zoomControl: true,
+          attributionControl: true,
+        });
+
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19,
+        }).addTo(map);
+
+        const marker = L.marker([data.latitude, data.longitude]).addTo(map);
+        markerRef.current = marker;
+        mapInstanceRef.current = map;
+
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+          }
+        }, 100);
+      } else {
+        mapInstanceRef.current.setView([data.latitude, data.longitude], 13);
+
+        if (markerRef.current) {
+          markerRef.current.setLatLng([data.latitude, data.longitude]);
+        } else {
+          const marker = L.marker([data.latitude, data.longitude]).addTo(
+            mapInstanceRef.current
+          );
+          markerRef.current = marker;
+        }
+      }
+    } catch (err) {
+      setMapError(true);
     }
-  }, [leafletReady, initMap]);
+  }, [leafletReady, data.latitude, data.longitude]);
 
   const mapsLink = `https://www.openstreetmap.org/?mlat=${data.latitude}&mlon=${data.longitude}#map=13/${data.latitude}/${data.longitude}`;
 
