@@ -1,38 +1,35 @@
 import { ActionFunction, redirect } from "remix";
 import invariant from "tiny-invariant";
-import { sendEvent } from "~/graphJSON.server";
 import { createFromUrlOrRawJson } from "~/jsonDoc.server";
+import { sendEvent } from "~/graphJSON.server";
 import {
   commitSession,
   getSession,
   setErrorMessage,
 } from "../../services/toast.server";
 
-type CreateFromFileError = {
-  filename?: boolean;
-  rawJson?: boolean;
+type CreateFromContentError = {
+  content?: boolean;
 };
 
 export const action: ActionFunction = async ({ request, context }) => {
   const formData = await request.formData();
   const toastCookie = await getSession(request.headers.get("cookie"));
-  const filename = formData.get("filename");
-  const rawJson = formData.get("rawJson");
+  const content = formData.get("content");
+  const filename = formData.get("filename") as string;
+  const action = formData.get("action") as string;
 
-  const errors: CreateFromFileError = {};
-
-  if (!filename) errors.filename = true;
-  if (!rawJson) errors.rawJson = true;
+  const errors: CreateFromContentError = {};
+  if (!content) errors.content = true;
 
   if (Object.keys(errors).length) {
     return errors;
   }
 
-  invariant(typeof filename === "string", "filename must be a string");
-  invariant(typeof rawJson === "string", "rawJson must be a string");
+  invariant(typeof content === "string", "content must be a string");
 
   try {
-    const doc = await createFromUrlOrRawJson(rawJson, filename);
+    const doc = await createFromUrlOrRawJson(content, filename || "Untitled");
 
     if (!doc) {
       setErrorMessage(
@@ -46,14 +43,15 @@ export const action: ActionFunction = async ({ request, context }) => {
       });
     }
 
-    const url = new URL(request.url);
+    const requestUrl = new URL(request.url);
 
     context.waitUntil(
       sendEvent({
         type: "create",
-        from: "file",
+        from: action || "content",
         id: doc.id,
-        source: url.searchParams.get("utm_source") ?? url.hostname,
+        source:
+          requestUrl.searchParams.get("utm_source") ?? requestUrl.hostname,
         metadata: {
           originalFormat: doc.originalFormat,
           filename: filename,
@@ -64,7 +62,7 @@ export const action: ActionFunction = async ({ request, context }) => {
     return redirect(`/j/${doc.id}`);
   } catch (e) {
     if (e instanceof Error) {
-      setErrorMessage(toastCookie, e.message, "Failed to parse file");
+      setErrorMessage(toastCookie, e.message, "Failed to parse content");
     } else {
       setErrorMessage(toastCookie, "Unknown error", "Something went wrong");
     }
