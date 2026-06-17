@@ -1,8 +1,8 @@
-import { hydrate } from "react-dom";
-import { RemixBrowser } from "remix";
+import { hydrateRoot } from "react-dom/client";
+import { RemixBrowser } from "@remix-run/react";
 import { load } from "fathom-client";
 
-hydrate(<RemixBrowser />, document);
+hydrateRoot(document, <RemixBrowser />);
 
 load("ROBFNTET", {
   spa: "history",

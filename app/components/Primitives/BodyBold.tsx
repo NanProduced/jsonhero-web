@@ -1,10 +1,7 @@
-import { FunctionComponent } from "react";
+import type { ReactNode } from "react";
 
-export const BodyBold: FunctionComponent<{ className?: string }> = ({
-  className,
-  children,
-}) => {
+export function BodyBold({ className, children }: { className?: string; children?: ReactNode }) {
   return (
     <p className={`font-sans text-base font-bold ${className}`}>{children}</p>
   );
-};
+}

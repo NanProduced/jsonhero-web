@@ -1,8 +1,5 @@
-import { FunctionComponent } from "react";
+import type { ReactNode } from "react";
 
-export const SmallBody: FunctionComponent<{ className?: string }> = ({
-  className,
-  children,
-}) => {
+export function SmallBody({ className, children }: { className?: string; children?: ReactNode }) {
   return <p className={`font-sans text-sm ${className}`}>{children}</p>;
-};
+}

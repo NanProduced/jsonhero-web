@@ -59,7 +59,7 @@ export function useJsonTree(options: JsonTreeOptions): UseJsonTreeInstance {
     id: doc.id,
     nodes: jsonNodes,
     parentRef,
-    estimateSize: useCallback((index) => 32, []),
+    estimateSize: useCallback((index: number) => 32, []),
     initialRect,
     overscan: options.overscan,
     persistState: true,

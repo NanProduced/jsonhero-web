@@ -1,9 +1,9 @@
-import { FunctionComponent, useCallback } from "react";
-import { useDropzone } from "react-dropzone";
+import { ReactNode, useCallback } from "react";
+import { useDropzone, FileWithPath } from "react-dropzone";
 import { DocumentDownloadIcon } from "@heroicons/react/outline";
 
-export const FileDropzone: FunctionComponent = ({ children }) => {
-  const onDrop = useCallback((acceptedFiles) => {
+export function FileDropzone({ children }: { children?: ReactNode }) {
+  const onDrop = useCallback((acceptedFiles: FileWithPath[]) => {
     acceptedFiles.forEach((file: Blob) => {
       const reader = new FileReader();
       reader.onabort = () => console.log("file reading was aborted");

@@ -1,10 +1,7 @@
-import { FunctionComponent } from "react";
+import type { ReactNode } from "react";
 
-export const ExtraLargeTitle: FunctionComponent<{ className?: string }> = ({
-  className,
-  children,
-}) => {
+export function ExtraLargeTitle({ className, children }: { className?: string; children?: ReactNode }) {
   return (
     <h1 className={`font-sans font-bold text-6xl ${className}`}>{children}</h1>
   );
-};
+}
